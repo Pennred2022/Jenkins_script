@@ -1,0 +1,94 @@
+Test 1:
+Overview:
+We have some of the DevOps toolsets as listed below and based on it we need to create a Jenkins Pipeline
+SCM: GitHub 
+Build: MSBuild
+Artifactory: Nexus Repository Manager
+CodeQuality: SonarQube
+
+Scenarios:
+Build a Jenkins file (Pipeline Script) with below scenarios/use case:
+Build should run on a on-demand node (AWS)
+Build should run on every 1Hr. if only commits on “develop” branch
+Sends an email before build starts and after build ends
+Compile using MSBuild
+Utilize dependencies from Nexus repository manager
+Run SonarQube
+Create artifacts (binaries in to zip)
+
+PS: Use any dummy names for reference.
+====================================================
+
+node
+{
+stage ('Clean workspace') {
+  steps {
+    cleanWs()
+  }
+}
+
+stage ('Git Checkout') {
+  steps {
+      git branch: 'dev', credentialsId: 'git-hub-credebtials', url: 'https://github.com/penntech/web-app'
+    }
+  }
+
+}
+stage('Restore NuGet package') {
+  steps {
+     bat "dotnet restore ${ITEM_ROOT}/build\\C//user/share\\web-app.sln.sln"
+  }
+}
+stage('Clean') {
+  steps {
+    bat "msbuild.exe ${ITEM_ROOT}/build\\C//user/share\\web-app.sln"/nologo /nr:false /p:platform=\"x64\" /p:configuration=\"release\" /t:clean"
+  }
+}
+tage('Increase version') {
+    steps {
+        echo "${env.BUILD_NUMBER}"
+        powershell '''
+           $xmlFileName = "c//user/share/\\web-app\\Package.appxmanifest"     
+           [xml]$xmlDoc = Get-Content $xmlFileName
+           $version = $xmlDoc.Package.Identity.Version
+           $trimmedVersion = $version -replace '.[0-9]+$', '.'
+           $xmlDoc.Package.Identity.Version = $trimmedVersion + ${env:BUILD_NUMBER}
+           echo 'New version:' $xmlDoc.Package.Identity.Version
+           $xmlDoc.Save($xmlFileName)
+        '''
+     }
+ }
+
+<SonarQubeAnalysisProperties  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sonarsource.com/msbuild/integration/2015/1">
+  <Property Name="sonar.host.url">http://52.11.123.37:9000</Property>
+  <Property Name="sonar.admin@ccf">hshsgsgshsheyhehrbrctdgd</Property>
+</SonarQubeAnalysisProperties>
+
+
+stage('Build') {
+ steps {
+  bat "msbuild.exe ${ITEM_ROOT}/build\\c//user/share/\\web-app.sln /nologo /nr:false  /p:platform=\"x64\" /p:configuration=\"release\" /p:PackageCertificateKeyFile=<path-to-certificate-file>.pfx /t:clean;restore;rebuild"
+ }
+}
+
+stage('UploadToNexus')
+
+nuget push .nupkg {a79abd6d-745a-30dc-ba9b-f557f3348cc6} -Source http://localhost:8081/repository/nuget-hosted/
+
+post {
+  always {
+      archiveArtifacts artifacts: '**/*.msix', followSymlinks: false
+     junit "TestResults/1.0.0.${env.BUILD_NUMBER}/results.xml"
+  }
+}
+
+before{
+    always{
+        emaiilext body: 'a Test Email', receipientProviders: [[$class:'DevelopersRecieentProvider']], subject: Test'
+  }
+}
+post {
+   always{
+       emaiilext body: 'a Test Email', receipientProviders: [[$class:'DevelopersRecieentProvider']], subject: Test'
+  }
+}
